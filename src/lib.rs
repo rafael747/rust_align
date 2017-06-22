@@ -172,6 +172,8 @@ impl SmithWaterman{
             }
         }
         return max_point;
+
+	////////////////////////// Alteração para NW: return o ultimo valor  ///////////////////////////	
     }
 
     fn local_alignment(&self, max_point_value: (usize, usize)) -> (String, String){
@@ -180,7 +182,10 @@ impl SmithWaterman{
         let mut last_movement = GraphMovements::Blank;
         let mut genome_sequence_alignment: Vec<char> =  Vec::with_capacity(self.genome_sequence.len());
         let mut read_sequence_alignment: Vec<char> =  Vec::with_capacity(self.read_sequence.len());
-        while max > 0 {
+        
+	////////////////////////// Alteração para NW: while row > 0 || col > 0  ///////////////////////////	
+
+	while max > 0 {
             let (row, col) = max_point;
             let one = self.genome_sequence.get(col-1).unwrap().clone();
             let two = self.read_sequence.get(row-1).unwrap().clone();
