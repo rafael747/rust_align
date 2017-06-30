@@ -2,6 +2,10 @@ extern crate nalgebra;
 use nalgebra::DMat;
 use std::fmt::{Debug, Formatter, Result};
 
+static MATCH: isize = 5;
+static MISMATCH: isize = -3;
+static GAP: isize = -4;
+
 /// The `SmithWaterman` struct
 ///
 /// genome_sequence: String
@@ -18,6 +22,7 @@ pub struct SmithWaterman {
     pub matrix:  DMat<isize>,
     pub matched: isize,
     pub missed: isize,
+    pub gap: isize,
 }
 pub enum GraphMovements {Blank, Left, Top, Diagonal}
 
@@ -34,7 +39,7 @@ impl SmithWaterman{
     pub fn new(genome_sequence: String, read_sequence: String) -> SmithWaterman {
         let matrix = DMat::new_zeros(0,0);
         SmithWaterman{matrix: matrix, genome_sequence: genome_sequence.chars().collect(),
-        read_sequence: read_sequence.chars().collect(), matched: 2, missed: -1}
+        read_sequence: read_sequence.chars().collect(), matched: MATCH, missed: MISMATCH, gap: GAP}
     }
 
     /// Constructs a new `SmithWaterman`.
@@ -49,7 +54,7 @@ impl SmithWaterman{
     pub fn new_chars(genome_sequence: Vec<char>, read_sequence: Vec<char>) -> SmithWaterman {
         let matrix = DMat::new_zeros(0,0);
         SmithWaterman{matrix: matrix, genome_sequence: genome_sequence,
-        read_sequence: read_sequence, matched: 2, missed: -1}
+        read_sequence: read_sequence, matched: MATCH, missed: MISMATCH, gap: GAP}
     }
 
     fn penalty(&self, value: isize, penalty_value: isize) -> isize{
@@ -72,7 +77,7 @@ impl SmithWaterman{
     /// let mut smitty = smith_waterman::SmithWaterman::new("ab".to_string(), "cb".to_string());
     /// let alignment = smitty.align();
     /// ```
-    pub fn align(&mut self) -> (String, String){
+    pub fn align(&mut self) -> (String, String, isize){
         let max_point = self.set_matrix_loops();
         return self.local_alignment(max_point);
     }
@@ -91,7 +96,7 @@ impl SmithWaterman{
     /// let mut smitty = smith_waterman::SmithWaterman::new("ab".to_string(), "cb".to_string());
     /// let alignment = smitty.align_fn();
     /// ```
-    pub fn align_fn(&mut self) -> (String, String){
+    pub fn align_fn(&mut self) -> (String, String, isize){
         let max_point = self.set_matrix_fn();
         return self.local_alignment(max_point);
     }
@@ -130,8 +135,8 @@ impl SmithWaterman{
     }
 
     fn calculated_movement(&self, row: usize, col: usize) -> isize{
-        let left = if col>=1 {self.penalty(self.matrix[(row, col-1)], self.missed)} else {0};
-        let top = if row>=1 {self.penalty(self.matrix[(row-1, col)], self.missed)} else {0};
+        let left = if col>=1 {self.penalty(self.matrix[(row, col-1)], self.gap)} else {0};
+        let top = if row>=1 {self.penalty(self.matrix[(row-1, col)], self.gap)} else {0};
         let diagonal_value = if row>=1 && col>=1 {self.matrix[(row-1, col-1)]} else {0};
         let diagonal_match = if row == 0 || col == 0{
             0
@@ -175,9 +180,10 @@ impl SmithWaterman{
 
     }
 
-    fn local_alignment(&self, max_point_value: (usize, usize)) -> (String, String){
+    fn local_alignment(&self, max_point_value: (usize, usize)) -> (String, String, isize){
         let mut max_point = max_point_value;
         let mut max = self.matrix[max_point];
+	let score = max;
         let mut last_movement = GraphMovements::Blank;
         let mut genome_sequence_alignment: Vec<char> =  Vec::with_capacity(self.genome_sequence.len());
         let mut read_sequence_alignment: Vec<char> =  Vec::with_capacity(self.read_sequence.len());
@@ -190,18 +196,39 @@ impl SmithWaterman{
             let top = self.matrix[(row-1, col)];
             let left = self.matrix[(row, col-1)];
             let diagonal = self.matrix[(row-1, col-1)];
-            max  = std::cmp::max(left, std::cmp::max(top, diagonal));
-            max_point = if diagonal == max{
-                last_movement = GraphMovements::Diagonal;
-                (row-1, col-1)
-            } else if left == max{
-                last_movement = GraphMovements::Left;
-                (row, col-1)
-            } else {
-                last_movement = GraphMovements::Top;
-                (row-1, col)
-            };
 
+	    let diagonal_match = if self.read_sequence.get(row-1).unwrap() == self.genome_sequence.get(col-1).unwrap(){
+                   self.penalty(diagonal, self.matched)
+                }else{
+                   self.penalty(diagonal, self.missed)};
+
+
+	    max_point = if diagonal_match == self.matrix[(row, col)]{
+                   last_movement = GraphMovements::Diagonal;
+                   (row-1, col-1)
+                } else if left == self.matrix[(row, col)]{
+                   last_movement = GraphMovements::Left;
+                   (row, col-1)
+                } else {
+                   last_movement = GraphMovements::Top;
+                   (row-1, col)
+               };
+	    
+	    max = self.matrix[max_point];
+
+
+//            max  = std::cmp::max(left, std::cmp::max(top, diagonal));
+//            max_point = if diagonal == max{
+//                last_movement = GraphMovements::Diagonal;
+//                (row-1, col-1)
+//            } else if left == max{
+//                last_movement = GraphMovements::Left;
+//                (row, col-1)
+//            } else {
+//                last_movement = GraphMovements::Top;
+//                (row-1, col)
+//            };
+//
             match last_movement {
                 GraphMovements::Blank  => {
                     genome_sequence_alignment.push(one);
@@ -225,7 +252,7 @@ impl SmithWaterman{
         let x1: String = genome_sequence_alignment.into_iter().collect();
         read_sequence_alignment.reverse();
         let x2: String = read_sequence_alignment.into_iter().collect();
-        return (x1,x2)
+        return (x1,x2, score)
     }
 }
 
@@ -284,7 +311,7 @@ impl NeedlemanWunsch{
     pub fn new(genome_sequence: String, read_sequence: String) -> NeedlemanWunsch {
         let matrix = DMat::new_zeros(0,0);
         NeedlemanWunsch{matrix: matrix, genome_sequence: genome_sequence.chars().collect(),
-        read_sequence: read_sequence.chars().collect(), matched: 5, missed: -3, gap: -4}
+        read_sequence: read_sequence.chars().collect(), matched: MATCH, missed: MISMATCH, gap: GAP}
     }
 
     /// Constructs a new `NeedlemanWunsch`.
@@ -299,7 +326,7 @@ impl NeedlemanWunsch{
     pub fn new_chars(genome_sequence: Vec<char>, read_sequence: Vec<char>) -> NeedlemanWunsch {
         let matrix = DMat::new_zeros(0,0);
         NeedlemanWunsch{matrix: matrix, genome_sequence: genome_sequence,
-        read_sequence: read_sequence, matched: 5, missed: -3, gap: -4}
+        read_sequence: read_sequence, matched: MATCH, missed: MISMATCH, gap: GAP}
     }
 
     fn penalty(&self, value: isize, penalty_value: isize) -> isize{
@@ -323,10 +350,9 @@ impl NeedlemanWunsch{
     /// let mut smitty = smith_waterman::NeedlemanWunsch::new("ab".to_string(), "cb".to_string());
     /// let alignment = smitty.align();
     /// ```
-    pub fn align(&mut self) -> (String, String){
+    pub fn align(&mut self) -> (String, String, isize){
         let last_point = self.set_matrix_loops();
         return self.global_alignment(last_point);
-        //return ("eai".to_string(), "blz?".to_string());
     }
 
     /// Runs the matrix to obtain the optimum local alignment.
@@ -343,7 +369,7 @@ impl NeedlemanWunsch{
     /// let mut smitty = smith_waterman::NeedlemanWunsch::new("ab".to_string(), "cb".to_string());
     /// let alignment = smitty.align_fn();
     /// ```
-    pub fn align_fn(&mut self) -> (String, String){
+    pub fn align_fn(&mut self) -> (String, String, isize){
         let last_point = self.set_matrix_fn();
         return self.global_alignment(last_point);
     }
@@ -450,9 +476,9 @@ impl NeedlemanWunsch{
 	////////////////////////// Alteração para NW: return o ultimo valor  ///////////////////////////	
     }
 
-    fn global_alignment(&self, last_point_value: (usize, usize)) -> (String, String){
+    fn global_alignment(&self, last_point_value: (usize, usize)) -> (String, String, isize){
         let mut last_point = last_point_value;
-       // let mut last = self.matrix[last_point];
+        let score = self.matrix[last_point];
         let mut last_movement = GraphMovements::Blank;
         let mut genome_sequence_alignment: Vec<char> =  Vec::with_capacity(self.genome_sequence.len());
         let mut read_sequence_alignment: Vec<char> =  Vec::with_capacity(self.read_sequence.len());
@@ -523,7 +549,7 @@ impl NeedlemanWunsch{
         read_sequence_alignment.reverse();
         let x2: String = read_sequence_alignment.into_iter().collect();
 
-        return (x1,x2)
+        return (x1,x2,score)
     }
 }
 
