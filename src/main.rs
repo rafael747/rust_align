@@ -27,11 +27,11 @@ fn main() {
     let global_alignment = needle.align();
 
     println!("Local alingnment score");	
- //   println!("{:?}", smitty);
+//    println!("{:?}", smitty);
     println!("{:?}", local_alignment.2);
 
     println!("\nGlobal alingnment score");	
- //   println!("{:?}", needle);
+//    println!("{:?}", needle);
     println!("{:?}", global_alignment.2);
 
 }
